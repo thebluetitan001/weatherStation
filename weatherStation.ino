@@ -10,7 +10,8 @@
 #define BMP_MOSI 11 
 #define BMP_CS 10
 
-// Connect RED of the AM2315 sensor to 5.0V
+// AM2315 sensor wiring
+// Connect RED to 5.0V
 // Connect BLACK to Ground
 // Connect WHITE to i2c clock to Analog 5
 // Connect YELLOW to i2c data to Analog 4
@@ -21,8 +22,8 @@ Adafruit_AM2315 am2315;
 Adafruit_BMP280 bme;
 RH_ASK driver(5000);
 
+const int tranmissionDelayTime = 5000;
 int sizeWeather;
-//int transmissionLength = 60;
 
 //tipping bucket collector diamter 90mm
 //volumne of bucket .7mm
@@ -31,9 +32,15 @@ int sizeWeather;
 //connect 2nd wire to pin digital interrupt pin 2
 
 //wind direction in degrees
-int WindVanePin = A0;
-float windVaneCosTotal = 0.0;
-float windVaneSinTotal = 0.0;
+
+const int windVaneSampleSize = 16;
+long newWindVaneTime;
+long lastWindVaneTime = 0;
+long windVaneCompare;
+String windVaneDirection = "";
+int count;
+int arrayCounter;
+bool RESETCOUNTER;
 
 //wind speed in km
 unsigned long resolution = 0;
@@ -48,8 +55,15 @@ volatile long lastRiseTimeWind = 0;
 void setup() {
 
   Serial.begin(9600);
-  //Serial.println("working");
-    //enables driver for am2315 temperature and humidty sensor
+
+  PCICR |= (1 << PCIE0);
+  //Enables Interrupt on Pin 9
+  pinMode(9,INPUT_PULLUP);
+  
+  PCMSK0 |= (1 << PCINT1);
+  lastWindVaneTime = micros();
+
+//enables driver for am2315 temperature and humidty sensor
   if (! am2315.begin()) {
      //Serial.println("Sensor not found, check wiring & pullups!");
      while (1);
@@ -66,34 +80,77 @@ void setup() {
   }
  
   //configure interrupt for tipping bucket scale
+  
   pinMode(2,INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(2), rain, FALLING);
+  attachInterrupt(digitalPinToInterrupt(2), rainISR, FALLING);
   
   //configure interrupt for wind speed
   pinMode(3,INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(3), wind, FALLING);
+  attachInterrupt(digitalPinToInterrupt(3), windISR, FALLING);
   
 }
 
 void loop() {
-  
-  captureWindVane();
-  
+
   rotations = 0;
-  delay(3000);
+  delay(tranmissionDelayTime);
   windSpeedCurrent = rotations * resolution;
-  
   generateWeatherString();
+  RESETCOUNTER = false;
+  count = 0;
 
 }
 
-void rain(){
+ISR(PCINT0_vect) {
+
+  //grabs stream of data coming from wind vane, and stores the final 4 bits in a string for transmission
+
+  newWindVaneTime = micros();
+  windVaneCompare = newWindVaneTime - lastWindVaneTime;
+  
+  //finds the start bit in the datastream, times appears to be around 300ms
+  if((windVaneCompare ) < 5000 and (windVaneCompare) > 2000){
+     count = 0;
+     arrayCounter = 0;
+     windVaneDirection = "";
+   }
+
+  if(RESETCOUNTER == false){ 
+    if(count < windVaneSampleSize){
+    
+      //modulus function differentiates between the rise and fall of the pin to know when to start reading time of the bit
+      
+      if((count % 2) == 1){
+        if((windVaneCompare)>700){
+        
+        //greater than 700ms is a 1, below is a zero
+        //stores the final 4 bits in the array 
+        //final 4 bits contains the directional data
+         
+          if(arrayCounter > 3 and arrayCounter < 8){
+            windVaneDirection.concat(1);  
+          }
+          arrayCounter ++;
+        }else{
+        if(arrayCounter > 3 and arrayCounter < 8){
+          windVaneDirection.concat(0);  
+        }
+        arrayCounter ++;
+        }
+        
+      }
+       count++;
+      }
+      lastWindVaneTime = newWindVaneTime;
+    }
+}
+
+void rainISR(){
   
    //If more than 10 ms has elapsed since the last time pin 2 went high
-   if ((millis() - lastRiseTimeRain) > 20)
+   if ((millis() - lastRiseTimeRain) > 10)
   {
 
-   //Serial.println("rain");
     tippingBucketTips++;
     
   }
@@ -102,7 +159,7 @@ void rain(){
 
 } 
 
-void wind(){
+void windISR(){
   
    //If more than 10 ms has elapsed since the last time pin 2 went high
    if ((millis() - lastRiseTimeWind) > 20)
@@ -112,7 +169,7 @@ void wind(){
     
   }
   
-    lastRiseTimeWind = millis();
+  lastRiseTimeWind = millis();
 
 } 
 
@@ -120,14 +177,14 @@ void generateWeatherString(){
 
       String weather = "AO,";
       weather = "";
-    
+      
       weather.concat(am2315.readTemperature());
       weather.concat(",");
       weather.concat(am2315.readHumidity());
       weather.concat(",");
       weather.concat(tippingBucketTips);
       weather.concat(",");
-      //weather.concat(getWindVane());
+      weather.concat(windVaneDirection);
       weather.concat(",");
       weather.concat(windSpeedCurrent);
       weather.concat(",");
@@ -141,12 +198,12 @@ void generateWeatherString(){
 
       weather.toCharArray(s,weather.length()+1);
     
-
+      //transmit(s);
       
       driver.send((uint8_t *)s, RH_ASK_MAX_MESSAGE_LEN);
-      
+
       Serial.println(s);
-      
+
       driver.waitPacketSent();
 
 }

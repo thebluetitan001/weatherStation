@@ -16,8 +16,6 @@
 // Connect WHITE to i2c clock to Analog 5
 // Connect YELLOW to i2c data to Analog 4
 
-//Create objects of sensor types AM2315, BMP280, RH_ASK
-
 Adafruit_AM2315 am2315;
 Adafruit_BMP280 bme;
 RH_ASK driver(5000);
@@ -58,9 +56,9 @@ void setup() {
 
   PCICR |= (1 << PCIE0);
   //Enables Interrupt on Pin 9
-  pinMode(9,INPUT_PULLUP);
+  pinMode(8,INPUT_PULLUP);
   
-  PCMSK0 |= (1 << PCINT1);
+  PCMSK0 |= (1 << PCINT0);
   lastWindVaneTime = micros();
 
 //enables driver for am2315 temperature and humidty sensor
@@ -98,7 +96,7 @@ void loop() {
   generateWeatherString();
   RESETCOUNTER = false;
   count = 0;
-
+  
 }
 
 ISR(PCINT0_vect) {
@@ -108,8 +106,8 @@ ISR(PCINT0_vect) {
   newWindVaneTime = micros();
   windVaneCompare = newWindVaneTime - lastWindVaneTime;
   
-  //finds the start bit in the datastream, times appears to be around 300ms
-  if((windVaneCompare ) < 5000 and (windVaneCompare) > 2000){
+  //finds the start bit in the datastream, times appears to be around 3000ms
+  if((windVaneCompare ) < 4000 and (windVaneCompare) > 2000){
      count = 0;
      arrayCounter = 0;
      windVaneDirection = "";
@@ -136,6 +134,9 @@ ISR(PCINT0_vect) {
           windVaneDirection.concat(0);  
         }
         arrayCounter ++;
+        if(arrayCounter > 8){
+          RESETCOUNTER == true;
+        }
         }
         
       }
@@ -189,8 +190,6 @@ void generateWeatherString(){
       weather.concat(windSpeedCurrent);
       weather.concat(",");
       weather.concat(int(bme.readPressure()/100));
-      weather.concat(",");
-      weather.concat("DDMMYY");
 
       sizeWeather = weather.length() +1;
       

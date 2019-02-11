@@ -1,5 +1,4 @@
 #include <RH_ASK.h>
-//#include <SPI.h>
 
 #include <Wire.h>
 #include <Adafruit_AM2315.h>
@@ -19,6 +18,8 @@
 Adafruit_AM2315 am2315;
 Adafruit_BMP280 bme;
 RH_ASK driver(5000);
+
+String weather = "AO,";
 
 const int tranmissionDelayTime = 5000;
 int sizeWeather;
@@ -54,11 +55,11 @@ void setup() {
 
   Serial.begin(9600);
 
-  PCICR |= (1 << PCIE0);
+  PCICR |= (1 << PCIE2);
   //Enables Interrupt on Pin 9
-  pinMode(8,INPUT_PULLUP);
+  pinMode(7,INPUT_PULLUP);
   
-  PCMSK0 |= (1 << PCINT0);
+  PCMSK2 |= (1 << PCINT23);
   lastWindVaneTime = micros();
 
 //enables driver for am2315 temperature and humidty sensor
@@ -76,7 +77,13 @@ void setup() {
   if (!driver.init()){
       // Serial.println("init failed");
   }
- 
+ /*
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3C for 128x32
+    //Serial.println(F("SSD1306 allocation failed"));
+    //for(;;); // Don't proceed, loop forever
+  }
+  */ 
+  
   //configure interrupt for tipping bucket scale
   
   pinMode(2,INPUT_PULLUP);
@@ -99,7 +106,7 @@ void loop() {
   
 }
 
-ISR(PCINT0_vect) {
+ISR(PCINT2_vect) {
 
   //grabs stream of data coming from wind vane, and stores the final 4 bits in a string for transmission
 
@@ -176,10 +183,11 @@ void windISR(){
 
 void generateWeatherString(){
 
-      String weather = "AO,";
-      weather = "";
-      
+      //display.clearDisplay();
+
+      weather = "";   
       weather.concat(am2315.readTemperature());
+
       weather.concat(",");
       weather.concat(am2315.readHumidity());
       weather.concat(",");
@@ -196,8 +204,6 @@ void generateWeatherString(){
       char s[int(sizeWeather)];
 
       weather.toCharArray(s,weather.length()+1);
-    
-      //transmit(s);
       
       driver.send((uint8_t *)s, RH_ASK_MAX_MESSAGE_LEN);
 

@@ -1,8 +1,15 @@
 #include <RF24.h>
+#include<SPI.h>
 
 const byte rxAddr[6] = "00001"; //TX adress (Same as on RX)
 int counter = 0; //Count TX (Only for demo example)
-RF24 radio(8, 9); //Define Radio (CE-PIN,CSN-PIN)
+#define RADIO_CE_PIN 8
+#define RADIO_CS_PIN 9
+
+//RF24 radio(8, 9); //Define Radio (CE-PIN,CSN-PIN)
+
+RF24 radio = RF24(RADIO_CE_PIN, RADIO_CS_PIN);
+const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL };
 
 #include <Wire.h>
 #include <Adafruit_AM2315.h>
@@ -90,10 +97,11 @@ void setup() {
 radio.begin();
 
 radio.setPALevel(RF24_PA_LOW); // Transmit Power (MAX,HIGH,LOW,MIN)
-radio.setDataRate( RF24_250KBPS ); //Transmit Speeed (250 Kbits)
-radio.setRetries(15, 15);
-radio.openWritingPipe(rxAddr);
-
+radio.setChannel(0x76);
+radio.setDataRate( RF24_1MBPS ); //Transmit Speeed (250 Kbits)
+radio.enableDynamicPayloads();
+radio.openWritingPipe(pipes[0]);
+radio.powerUp();
 
 // Disable Receiver
 radio.stopListening();
@@ -234,8 +242,7 @@ void generateWeatherString(){
 
       PCMSK2 &= ~(1<<PCINT23);
         radio.write(&s, 32);
+         Serial.println(s);
       PCMSK2 != (1<<PCINT23);    
     
-      Serial.println(s);
-
 }

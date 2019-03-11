@@ -33,7 +33,7 @@ Adafruit_BMP280 bme;
 String weather;
 //char weatherArray[32];
 
-const int tranmissionDelayTime = 500;
+const int tranmissionDelayTime = 5000;
 int sizeWeather;
 
 //tipping bucket collector diamter 90mm
@@ -96,13 +96,15 @@ void setup() {
 
 radio.begin();
 
-radio.setPALevel(RF24_PA_LOW); // Transmit Power (MAX,HIGH,LOW,MIN)
-radio.setChannel(0x76);
+radio.setPALevel(RF24_PA_MIN); // Transmit Power (MAX,HIGH,LOW,MIN)
+//Decimal 76 is 0x4c in hexidecimal confirm that you have configured correctly on both sides
+radio.setChannel(76);
 radio.setDataRate( RF24_1MBPS ); //Transmit Speeed (250 Kbits)
+
 radio.enableDynamicPayloads();
 radio.openWritingPipe(pipes[0]);
 radio.powerUp();
-
+radio.printDetails();
 // Disable Receiver
 radio.stopListening();
   
@@ -119,11 +121,11 @@ radio.stopListening();
 
 void loop() {
 
-  rotations = 0;
   delay(tranmissionDelayTime);
   windSpeedCurrent = rotations * resolution;
   PCMSK2 &= ~(1<<PCINT23);
   for(int i=0; i < sizeof(wVD); i++){
+   // Serial.println(wVD[i]);
       windVaneDirection.concat(wVD[i]);
   }
       
@@ -221,10 +223,10 @@ void windISR(){
 } 
 
 void generateWeatherString(){
-
-      weather=am2315.readTemperature();
+      weather="";
+      weather.concat(int(am2315.readTemperature()*100));
       weather.concat(",");
-      weather.concat(am2315.readHumidity());
+      weather.concat(int(am2315.readHumidity()*100));
       weather.concat(",");
       weather.concat(tippingBucketTips);
       weather.concat(",");
@@ -233,13 +235,14 @@ void generateWeatherString(){
       weather.concat(rotations);
       weather.concat(",");
       weather.concat(int(bme.readPressure()/100));
-
+      
+      //weather = "Hello World";
       sizeWeather = weather.length() +1;
       
       char s[int(sizeWeather)];
 
       weather.toCharArray(s,weather.length()+1);
-
+      
       PCMSK2 &= ~(1<<PCINT23);
         radio.write(&s, 32);
          Serial.println(s);

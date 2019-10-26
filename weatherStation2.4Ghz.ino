@@ -13,6 +13,8 @@ const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL };
 
 #include <Wire.h>
 #include <Adafruit_AM2315.h>
+//The AM2315 has a default I2C address of 0x5C and cannot be changed
+//modified SPI library to reflect this
 #include <Adafruit_BMP280.h>
 
 #define BMP_SCK 13
